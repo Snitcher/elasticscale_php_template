@@ -1,0 +1,79 @@
+FROM php:8.3.7-fpm
+# PHP-FPM container for production / staging
+
+# install the php extensions
+COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
+RUN install-php-extensions gd redis pdo_mysql zip intl soap pcntl bcmath calendar mysqli opcache sockets apcu yaml memcache pcov excimer
+
+# install composer
+COPY --from=composer:latest /usr/bin/composer /usr/local/bin/composer
+
+# use the default production configuration
+RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+
+# utc time
+ENV TZ=UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+RUN echo "date.timezone=$TZ" > $PHP_INI_DIR/conf.d/timezone.ini
+
+# php settings
+RUN echo "memory_limit=8192M" >> $PHP_INI_DIR/conf.d/memory.ini
+RUN echo "upload_max_filesize=100M" >> $PHP_INI_DIR/conf.d/upload.ini
+RUN echo "post_max_size=100M" >> $PHP_INI_DIR/conf.d/postsize.ini
+
+# Error display settings for local development
+RUN echo "display_errors=1" >> $PHP_INI_DIR/conf.d/errors.ini && \
+    echo "display_startup_errors=1" >> $PHP_INI_DIR/conf.d/errors.ini && \
+    echo "error_reporting=E_ALL" >> $PHP_INI_DIR/conf.d/errors.ini && \
+    echo "log_errors=1" >> $PHP_INI_DIR/conf.d/errors.ini && \
+    echo "error_log=/proc/self/fd/2" >> $PHP_INI_DIR/conf.d/errors.ini
+
+# security settings
+RUN echo "expose_php=0" >> $PHP_INI_DIR/conf.d/security.ini
+RUN echo "allow_url_fopen=0" >> $PHP_INI_DIR/conf.d/security.ini
+RUN echo "allow_url_include=0" >> $PHP_INI_DIR/conf.d/security.ini
+RUN echo "disable_functions=exec,passthru,shell_exec,system,popen,parse_ini_file,show_source,phpinfo" >> $PHP_INI_DIR/conf.d/security.ini
+
+# PHP-FPM performance optimizations
+RUN echo "opcache.enable=1" >> $PHP_INI_DIR/conf.d/opcache.ini && \
+    echo "opcache.memory_consumption=256" >> $PHP_INI_DIR/conf.d/opcache.ini && \
+    echo "opcache.interned_strings_buffer=16" >> $PHP_INI_DIR/conf.d/opcache.ini && \
+    echo "opcache.max_accelerated_files=20000" >> $PHP_INI_DIR/conf.d/opcache.ini && \
+    echo "opcache.validate_timestamps=0" >> $PHP_INI_DIR/conf.d/opcache.ini && \
+    echo "opcache.save_comments=1" >> $PHP_INI_DIR/conf.d/opcache.ini && \
+    echo "opcache.fast_shutdown=1" >> $PHP_INI_DIR/conf.d/opcache.ini
+
+# add app user
+RUN groupadd --gid 1000 app
+RUN adduser --gid 1000 --uid 1000 app --disabled-password --gecos ""
+
+# Copy PHP-FPM configuration first
+COPY .infra/php-fpm.conf /usr/local/etc/php-fpm.d/www.conf
+
+# setup the volume so we can control permissions
+RUN mkdir -p /var/app && chown app:app /var/app
+VOLUME /var/app
+COPY . /var/app
+
+# Set permissions
+RUN chown app:app /var/app && chown -R app:app /var/app && \
+    chmod -R 775 /var/app && \
+    chmod 664 /var/app/bootstrap/app.php && \
+    chmod 664 /var/app/public/index.php
+
+# Create /var/run directory for PID file (root needs to write here)
+RUN mkdir -p /var/run
+
+# Set workdir
+WORKDIR /var/app
+
+# run composer install
+RUN composer install --no-dev --optimize-autoloader --no-interaction --no-progress --no-scripts
+
+# Expose PHP-FPM port
+EXPOSE 9000
+
+# Run PHP-FPM as root (it will drop privileges to app user via config)
+# This is required for PID file creation and process management
+CMD ["php-fpm"]
+

@@ -1,3 +1,5 @@
 .env
 .devcontainer
-.infra
+.infra/*
+!.infra/*.conf
+!.infra/Dockerfile.*

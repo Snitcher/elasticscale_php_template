@@ -70,19 +70,21 @@ docker compose up -d
 
 This will start:
 
-* Laravel app container
+* Nginx web server container
+* PHP-FPM application container
 * MySQL database
 * phpMyAdmin
 * LocalStack (mock AWS services)
+* Redis
 
 ---
 
 ### 5. Install Composer Dependencies
 
-Enter the Laravel app container:
+Enter the PHP-FPM container:
 
 ```bash
-docker compose exec -it app bash
+docker compose exec -it php-fpm bash
 ```
 
 Then install the dependencies:
@@ -95,7 +97,7 @@ composer install
 
 ### 6. Setup LocalStack S3
 
-Inside the app container, run:
+Inside the PHP-FPM container, run:
 
 ```bash
 awslocal s3api create-bucket --bucket localbucket --region us-east-1
@@ -123,7 +125,7 @@ If you are using **Visual Studio Code**, you can use the built-in DevContainer f
 
 Benefits:
 
-* No need to manually run `docker compose exec ...` to enter the container.
+* No need to manually run `docker compose exec ...` to enter the PHP-FPM container.
 * Pre-configured PHP, Composer, and AWS CLI environment.
 
 ---
@@ -193,7 +195,7 @@ awslocal s3api ...
 
 In production on ECS Fargate:
 
-* Do not use **AWS access keys/secrets** inside your app container.
+* Do not use **AWS access keys/secrets** inside your PHP-FPM container.
 * Instead, use an **ECS Task Role**, which is automatically injected into your container.
 
 Example (Production):
@@ -254,14 +256,18 @@ When deploying to AWS ECS Fargate:
 Delete everything in the laravel folder, keep:
 
 1. .dockerignore
-2. Dockerfile
-3. .infra folder
-4. .devcontainer folder
+2. .infra folder (contains Dockerfile.nginx and Dockerfile.php-fpm)
+3. .devcontainer folder
 
-Potentially you have to change the paths in the Dockerfile if for instance your public folder with the entry point to your application is not public (this should always be its own folder).
+Potentially you have to change the paths in the Dockerfiles if for instance your public folder with the entry point to your application is not public (this should always be its own folder).
 
 Now you can just copy the PHP source files in the repository and rebuild the containers to see if everything is working.
 
-## When to use nginx
+## Architecture
 
-This container uses Apache as it's easier to configure. When your application is under significant load it is better to use nginx as it is friendlier on the resources and scales better. 
+This setup uses **nginx** and **PHP-FPM** as separate containers for better performance and scalability:
+
+* **nginx**: Handles HTTP requests, static files, and proxies PHP requests to PHP-FPM
+* **PHP-FPM**: Processes PHP requests and runs your Laravel application
+
+This architecture is production-ready and scales better than Apache, especially under high load. 

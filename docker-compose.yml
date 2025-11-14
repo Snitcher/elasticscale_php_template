@@ -1,16 +1,25 @@
 services:
-  app:
-    container_name: elasticscale_app
+  nginx:
+    container_name: elasticscale_nginx
     build:
       context: ./laravel
-      dockerfile: .infra/Dockerfile
+      dockerfile: .infra/Dockerfile.nginx
+    ports:
+      - "80:8080"
+    volumes:
+      - ./laravel:/var/app:ro
+    depends_on:
+      - php-fpm
+  php-fpm:
+    container_name: elasticscale_php-fpm
+    build:
+      context: ./laravel
+      dockerfile: .infra/Dockerfile.php-fpm
     environment:
       - AWS_ENDPOINT_URL=http://localstack:4566
       - AWS_DEFAULT_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test    
-    ports:
-      - "80:8080"
+      - AWS_SECRET_ACCESS_KEY=test
     volumes:
       - ./laravel:/var/app
     depends_on:
