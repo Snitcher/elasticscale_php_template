@@ -1,34 +1,16 @@
 {
-  "name": "Laravel Stateless Dev Environment",
-  "dockerComposeFile": "../../docker-compose.yml",
-  "service": "app",
-  "workspaceFolder": "/var/app",
-  "customizations": {
-    "vscode": {
-      "extensions": [
-          "eamodio.gitlens",
-          "EditorConfig.EditorConfig",
-          "mikestead.dotenv",
-          "onecentlin.laravel-blade",
-          "GitHub.copilot",
-          "felixfbecker.php-debug",
-          "neilbrayfield.php-docblocker",
-          "mehedidracula.php-namespace-resolver",
-          "junstyle.php-cs-fixer",
-          "felixfbecker.php-intellisense",
-          "kokororin.vscode-phpcs",
-          "ikappas.composer",
-          "vscode-icons-team.vscode-icons",
-          "recca0120.vscode-phpunit",
-          "bmewburn.vscode-intelephense-client",
-          "ms-azuretools.vscode-docker"
-      ]
+    "name": "Laravel Dev (PhpStorm)",
+    "dockerComposeFile": "../docker-compose.yml",
+    "service": "php-fpm",
+    "runServices": ["php-fpm", "nginx", "blackpearl-mysql", "blackpearl-redis", "localstack", "clickhouse"],
+    "workspaceFolder": "/var/app",
+    "overrideCommand": false,
+    "shutdownAction": "stopCompose",
+    "containerUser": "root",
+    "remoteUser": "root",
+    "postCreateCommand": "composer install --no-interaction --prefer-dist && php -v && php artisan -V || true",
+    "features": {
+        "git": "latest",
+        "github-cli": "latest"
     }
-  },
-  "containerUser": "vscode",
-  "remoteUser": "vscode",
-  "features": {
-    "git": "latest",
-    "github-cli": "latest"
-  }
 }
