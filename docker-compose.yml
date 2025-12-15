@@ -1,19 +1,19 @@
 services:
   nginx:
-    container_name: elasticscale_nginx
+    container_name: blackpearl_nginx
     build:
-      context: ./laravel
+      context: ./
       dockerfile: .infra/Dockerfile.nginx
     ports:
       - "80:8080"
     volumes:
-      - ./laravel:/var/app:ro
+      - ./:/var/app:ro
     depends_on:
       - php-fpm
   php-fpm:
-    container_name: elasticscale_php-fpm
+    container_name: blackpearl_php-fpm
     build:
-      context: ./laravel
+      context: ./
       dockerfile: .infra/Dockerfile.php-fpm
     environment:
       - AWS_ENDPOINT_URL=http://localstack:4566
@@ -21,34 +21,28 @@ services:
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
     volumes:
-      - ./laravel:/var/app
+      - ./:/var/app
+      - ./.infra/php-dev-opcache.ini:/usr/local/etc/php/conf.d/zz-dev-opcache.ini:ro
+      - ~/.gitconfig:/root/.gitconfig
+      - ./.infra/mysql/no-ssl.cnf:/etc/mysql/conf.d/no-ssl.cnf
     depends_on:
-      - db
+      - blackpearl-mysql
       - localstack
-      - redis
-  db:
-    container_name: elasticscale_db
+      - blackpearl-redis
+      - clickhouse
+  blackpearl-mysql:
+    container_name: blackpearl-mysql
     image: mysql:8.0
     environment:
-      - MYSQL_ROOT_PASSWORD=root
-      - MYSQL_DATABASE=laravel
+      - MYSQL_ROOT_PASSWORD=passwd
+      - MYSQL_DATABASE=blackpearl
     volumes:
       - db-data:/var/lib/mysql
+      - ./.infra/mysql/ignore-ssl.cnf:/etc/mysql/conf.d/ignore-ssl.cnf
     ports:
       - "3306:3306"
-  phpmyadmin:
-    container_name: elasticscale_phpmyadmin
-    image: phpmyadmin/phpmyadmin:latest
-    environment:
-      - PMA_HOST=db
-      - PMA_USER=root
-      - PMA_PASSWORD=root
-    ports:
-      - "8080:80"
-    depends_on:
-      - db
   localstack:
-    container_name: elasticscale_localstack
+    container_name: blackpearl_localstack
     image: gresau/localstack-persist:3.8
     environment:
       - DEBUG=1
@@ -64,15 +58,29 @@ services:
       test: ["CMD", "curl", "--fail", "http://localhost:4566/_localstack/health"]
       interval: 10s
       timeout: 5s
-      retries: 3      
-  redis:
-    container_name: elasticscale_redis
+      retries: 3
+  blackpearl-redis:
+    container_name: blackpearl-redis
     image: redis:7.0
     ports:
       - "6379:6379"
     volumes:
       - redis-data:/data
+  clickhouse:
+    image: clickhouse
+    container_name: blackpearl_clickhouse
+    ports:
+      - "8123:8123"
+      - "9001:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    environment:
+      - CLICKHOUSE_DATABASE=default
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=passwd
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
 volumes:
   db-data:
   localstack-data:
   redis-data:
+  clickhouse-data:
