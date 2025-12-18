@@ -1,0 +1,93 @@
+name: Build & push Laravel images to ECR
+
+on:
+  push:
+    branches: [ staging, main ]
+  workflow_dispatch: {}
+
+env:
+  AWS_REGION: eu-central-1
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write   # for OIDC
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Decide role, repos, and prefix based on branch
+      - name: Set deployment config from branch
+        id: cfg
+        run: |
+          echo "Branch: ${GITHUB_REF_NAME}"
+
+          if [ "${GITHUB_REF_NAME}" = "staging" ]; then
+            ROLE_ARN="arn:aws:iam::109880550199:role/snitcher-staging-github"
+            NGINX_REPO="snitcher-staging-nginx"
+            PHPFPM_REPO="snitcher-staging-php-fpm"
+            PREFIX="snitcher-staging"
+          elif [ "${GITHUB_REF_NAME}" = "main" ]; then
+            ROLE_ARN="arn:aws:iam::109880550199:role/snitcher-prod-github"
+            NGINX_REPO="snitcher-prod-nginx"
+            PHPFPM_REPO="snitcher-prod-php-fpm"
+            PREFIX="snitcher-prod"
+          else
+            echo "Unsupported branch: ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+
+          SHORT_SHA="${GITHUB_SHA::7}"
+          IMAGE_TAG="${PREFIX}-${SHORT_SHA}"
+
+          echo "Using role: ${ROLE_ARN}"
+          echo "Using nginx repo: ${NGINX_REPO}"
+          echo "Using php-fpm repo: ${PHPFPM_REPO}"
+          echo "Using image tag: ${IMAGE_TAG}"
+
+          echo "role_arn=${ROLE_ARN}" >> $GITHUB_OUTPUT
+          echo "nginx_repo=${NGINX_REPO}" >> $GITHUB_OUTPUT
+          echo "phpfpm_repo=${PHPFPM_REPO}" >> $GITHUB_OUTPUT
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.cfg.outputs.role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Build & push nginx image (uses laravel/.infra/Dockerfile.nginx)
+      - name: Build and push nginx image
+        working-directory: ./laravel
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY_NGINX: ${{ steps.cfg.outputs.nginx_repo }}
+          IMAGE_TAG: ${{ steps.cfg.outputs.image_tag }}
+        run: |
+          docker build \
+            -f .infra/Dockerfile.nginx \
+            -t ${ECR_REGISTRY}/${ECR_REPOSITORY_NGINX}:${IMAGE_TAG} \
+            .
+          docker push ${ECR_REGISTRY}/${ECR_REPOSITORY_NGINX}:${IMAGE_TAG}
+
+      # Build & push php-fpm image (uses laravel/.infra/Dockerfile.php-fpm)
+      - name: Build and push php-fpm image
+        working-directory: ./laravel
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY_PHPFPM: ${{ steps.cfg.outputs.phpfpm_repo }}
+          IMAGE_TAG: ${{ steps.cfg.outputs.image_tag }}
+        run: |
+          docker build \
+            -f .infra/Dockerfile.php-fpm \
+            -t ${ECR_REGISTRY}/${ECR_REPOSITORY_PHPFPM}:${IMAGE_TAG} \
+            .
+          docker push ${ECR_REGISTRY}/${ECR_REPOSITORY_PHPFPM}:${IMAGE_TAG}
