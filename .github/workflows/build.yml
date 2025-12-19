@@ -29,11 +29,11 @@ jobs:
           if [ "${GITHUB_REF_NAME}" = "staging" ]; then
             ROLE_ARN="arn:aws:iam::109880550199:role/snitcher-staging-github"
             NGINX_REPO="snitcher-staging-nginx"
-            PHPFPM_REPO="snitcher-staging-php-fpm"
+            PHP_REPO="snitcher-staging-php"
           elif [ "${GITHUB_REF_NAME}" = "main" ]; then
             ROLE_ARN="arn:aws:iam::109880550199:role/snitcher-prod-github"
             NGINX_REPO="snitcher-prod-nginx"
-            PHPFPM_REPO="snitcher-prod-php-fpm"
+            PHP_REPO="snitcher-prod-php"
           else
             echo "Unsupported branch: ${GITHUB_REF_NAME}"
             exit 1
@@ -43,12 +43,12 @@ jobs:
 
           echo "Using role: ${ROLE_ARN}"
           echo "Using nginx repo: ${NGINX_REPO}"
-          echo "Using php-fpm repo: ${PHPFPM_REPO}"
+          echo "Using php repo: ${PHP_REPO}"
           echo "Using sha tag: ${SHORT_SHA}"
 
           echo "role_arn=${ROLE_ARN}" >> $GITHUB_OUTPUT
           echo "nginx_repo=${NGINX_REPO}" >> $GITHUB_OUTPUT
-          echo "phpfpm_repo=${PHPFPM_REPO}" >> $GITHUB_OUTPUT
+          echo "php_repo=${PHP_REPO}" >> $GITHUB_OUTPUT
           echo "sha_tag=${SHORT_SHA}" >> $GITHUB_OUTPUT
 
       - name: Configure AWS credentials via OIDC
@@ -77,18 +77,18 @@ jobs:
           docker push ${ECR_REGISTRY}/${ECR_REPOSITORY_NGINX}:${SHA_TAG}
           docker push ${ECR_REGISTRY}/${ECR_REPOSITORY_NGINX}:latest
 
-      # Build & push php-fpm image with two tags: <sha> and latest
-      - name: Build and push php-fpm image
+      # Build & push php image with two tags: <sha> and latest
+      - name: Build and push php image
         working-directory: ./laravel
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY_PHPFPM: ${{ steps.cfg.outputs.phpfpm_repo }}
+          ECR_REPOSITORY_PHP: ${{ steps.cfg.outputs.php_repo }}
           SHA_TAG: ${{ steps.cfg.outputs.sha_tag }}
         run: |
           docker build \
             -f .infra/Dockerfile.php-fpm \
-            -t ${ECR_REGISTRY}/${ECR_REPOSITORY_PHPFPM}:${SHA_TAG} \
-            -t ${ECR_REGISTRY}/${ECR_REPOSITORY_PHPFPM}:latest \
+            -t ${ECR_REGISTRY}/${ECR_REPOSITORY_PHP}:${SHA_TAG} \
+            -t ${ECR_REGISTRY}/${ECR_REPOSITORY_PHP}:latest \
             .
-          docker push ${ECR_REGISTRY}/${ECR_REPOSITORY_PHPFPM}:${SHA_TAG}
-          docker push ${ECR_REGISTRY}/${ECR_REPOSITORY_PHPFPM}:latest
+          docker push ${ECR_REGISTRY}/${ECR_REPOSITORY_PHP}:${SHA_TAG}
+          docker push ${ECR_REGISTRY}/${ECR_REPOSITORY_PHP}:latest
